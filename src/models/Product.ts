@@ -18,6 +18,7 @@ export interface ISizeChartRow {
 export interface IProduct extends Document {
   name: string;
   slug: string;
+  color?: string;
   description: string;
   highlights: string[];
   price: number;
@@ -59,6 +60,7 @@ const ProductSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    color: { type: String, default: 'Default', trim: true },
     description: { type: String, default: '' },
     highlights: { type: [String], default: [] },
     price: { type: Number, required: true, min: 0 },

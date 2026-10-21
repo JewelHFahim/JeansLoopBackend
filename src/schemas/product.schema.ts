@@ -18,6 +18,7 @@ export const sizeChartRowSchema = z.object({
 export const createProductSchema = z.object({
   name: z.string().trim().min(2, 'Product name is required'),
   slug: z.string().trim().min(2, 'Slug is required'),
+  color: z.string().trim().optional().default('Default'),
   description: z.string().trim().default(''),
   highlights: z.array(z.string().trim()).default([]),
   price: z.number().min(0, 'Price must be non-negative'),
