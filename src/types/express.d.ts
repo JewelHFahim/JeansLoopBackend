@@ -4,6 +4,7 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: string;
+  permissions?: string[];
 }
 
 // Augment Express Request with a typed `user` property set by auth middleware

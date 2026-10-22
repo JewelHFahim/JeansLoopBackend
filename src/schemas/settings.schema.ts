@@ -8,6 +8,16 @@ export const socialLinksSchema = z.object({
   tiktok: z.string().trim().optional().default(''),
 });
 
+export const featuredCategorySectionSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  category: z.string().trim().optional().default('Jeans'),
+  title: z.string().trim().optional().default('Denim Jeans'),
+  tagline: z.string().trim().optional().default('Authentic Raw Denim • Engineered for Durability'),
+  badge: z.string().trim().optional().default('Featured Collection'),
+  bannerImage: z.string().trim().optional().default(''),
+  buttonText: z.string().trim().optional().default('Explore Collection'),
+});
+
 export const updateSettingsSchema = z.object({
   title: z.string().trim().min(1).optional(),
   tagline: z.string().trim().optional(),
@@ -19,6 +29,7 @@ export const updateSettingsSchema = z.object({
   businessHours: z.string().trim().optional(),
   announcement: z.string().trim().optional(),
   socialLinks: socialLinksSchema.partial().optional(),
+  featuredCategorySection: featuredCategorySectionSchema.partial().optional(),
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

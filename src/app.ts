@@ -20,9 +20,13 @@ import uploadRoutes from './routes/upload.routes';
 import statsRoutes from './routes/stats.routes';
 import settingsRoutes from './routes/settings.routes';
 import reviewRoutes from './routes/review.routes';
+import activityRoutes from './routes/activity.routes';
 
 export function createApp(): Express {
   const app = express();
+
+  // Trust proxy for NGINX/reverse proxy on VPS so client IP and HTTPS headers are read correctly
+  app.set('trust proxy', 1);
 
   // 1. Core security headers
   app.use(helmet());
@@ -68,6 +72,7 @@ export function createApp(): Express {
   app.use('/api/v1/stats', statsRoutes);
   app.use('/api/v1/settings', settingsRoutes);
   app.use('/api/v1/reviews', reviewRoutes);
+  app.use('/api/v1/activity-logs', activityRoutes);
 
   // 9. 404 handler
   app.use((_req, res) => {

@@ -44,6 +44,9 @@ export const productQuerySchema = z.object({
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   size: z.string().trim().optional(),
+  status: z.enum(['all', 'published', 'draft']).optional(),
+  includeDrafts: z.coerce.boolean().optional(),
+  stockStatus: z.enum(['all', 'inStock', 'lowStock', 'outOfStock']).optional(),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

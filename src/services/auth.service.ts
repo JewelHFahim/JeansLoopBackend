@@ -12,6 +12,7 @@ export interface AuthTokens {
     name: string;
     email: string;
     role: string;
+    permissions?: string[];
     phone?: string;
     address?: string;
   };
@@ -23,6 +24,7 @@ function formatUserResponse(user: IUser) {
     name: user.name,
     email: user.email,
     role: user.role,
+    permissions: user.permissions || [],
     phone: user.phone,
     address: user.address,
   };
@@ -46,6 +48,7 @@ export async function registerUser(input: RegisterInput): Promise<AuthTokens> {
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    permissions: user.permissions || [],
   };
 
   const accessToken = signAccessToken(payload);
@@ -74,6 +77,7 @@ export async function loginUser(input: LoginInput): Promise<AuthTokens> {
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    permissions: user.permissions || [],
   };
 
   const accessToken = signAccessToken(payload);
@@ -103,6 +107,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    permissions: user.permissions || [],
   };
 
   const accessToken = signAccessToken(newPayload);

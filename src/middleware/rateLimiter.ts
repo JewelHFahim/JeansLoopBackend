@@ -1,9 +1,9 @@
 import rateLimit from 'express-rate-limit';
 
-/** General API limiter: 200 requests per 15 minutes */
+/** General API limiter: 1,000 requests per 15 minutes per IP (supports multiple users on shared Wi-Fi) */
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later', code: 'RATE_LIMITED' },

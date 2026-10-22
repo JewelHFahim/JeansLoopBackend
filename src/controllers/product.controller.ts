@@ -3,6 +3,7 @@ import { Product } from '../models/Product';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess, sendPaginated } from '../utils/apiResponse';
 import { AppError } from '../utils/AppError';
+import { recordActivity } from '../services/activity.service';
 import { escapeRegex } from '../utils/escapeRegex';
 import { ProductQueryInput } from '../schemas/product.schema';
 
@@ -12,7 +13,17 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const limit = Number(queryInput.limit) || 20;
   const skip = (page - 1) * limit;
 
-  const conditions: any[] = [{ isDraft: false }];
+  const conditions: any[] = [];
+
+  // Status / Draft filter
+  if (queryInput.status === 'published') {
+    conditions.push({ isDraft: false });
+  } else if (queryInput.status === 'draft') {
+    conditions.push({ isDraft: true });
+  } else if (!queryInput.includeDrafts && queryInput.status !== 'all') {
+    // Default public storefront behavior: only published
+    conditions.push({ isDraft: false });
+  }
 
   // 1. Keyword search with ReDoS protection
   if (queryInput.keyword) {
@@ -22,12 +33,13 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
         { name: { $regex: escaped, $options: 'i' } },
         { description: { $regex: escaped, $options: 'i' } },
         { category: { $regex: escaped, $options: 'i' } },
+        { 'variants.sku': { $regex: escaped, $options: 'i' } },
       ],
     });
   }
 
   // 2. Category filter
-  if (queryInput.category) {
+  if (queryInput.category && queryInput.category !== 'all') {
     const escapedCat = escapeRegex(queryInput.category);
     conditions.push({ category: { $regex: `^${escapedCat}$`, $options: 'i' } });
   }
@@ -56,7 +68,16 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     conditions.push({ 'variants.size': queryInput.size });
   }
 
-  const mongoQuery = conditions.length > 1 ? { $and: conditions } : conditions[0];
+  // 6. Stock status filter
+  if (queryInput.stockStatus === 'inStock') {
+    conditions.push({ 'variants.stock': { $gt: 0 } });
+  } else if (queryInput.stockStatus === 'outOfStock') {
+    conditions.push({ 'variants.stock': { $not: { $gt: 0 } } });
+  } else if (queryInput.stockStatus === 'lowStock') {
+    conditions.push({ 'variants.stock': { $gt: 0, $lte: 5 } });
+  }
+
+  const mongoQuery = conditions.length > 1 ? { $and: conditions } : conditions.length === 1 ? conditions[0] : {};
 
   // Sorting
   let sortOption: Record<string, 1 | -1> = { createdAt: -1 };
@@ -102,12 +123,32 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
     throw AppError.conflict('A product with this slug already exists');
   }
 
-  const product = await Product.create(req.body);
+  const productData = {
+    ...req.body,
+    createdBy: {
+      userId: req.user!.userId,
+      email: req.user!.email,
+    },
+  };
+
+  const product = await Product.create(productData);
+
+  recordActivity({
+    userId: req.user!.userId,
+    userEmail: req.user!.email,
+    userRole: req.user!.role,
+    action: 'PRODUCT_CREATED',
+    entityType: 'PRODUCT',
+    entityId: product._id.toString(),
+    entityTitle: product.name,
+    description: `Created new product "${product.name}"`,
+  });
+
   sendSuccess(res, product, 'Product created successfully', 201);
 });
 
 export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const product = await Product.findById(id);
   if (!product) {
     throw AppError.notFound('Product not found');
@@ -121,16 +162,43 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
   }
 
   Object.assign(product, req.body);
+  product.updatedBy = {
+    userId: req.user!.userId as any,
+    email: req.user!.email,
+  };
   const updated = await product.save();
+
+  recordActivity({
+    userId: req.user!.userId,
+    userEmail: req.user!.email,
+    userRole: req.user!.role,
+    action: 'PRODUCT_UPDATED',
+    entityType: 'PRODUCT',
+    entityId: updated._id.toString(),
+    entityTitle: updated.name,
+    description: `Updated product details/pricing for "${updated.name}"`,
+  });
 
   sendSuccess(res, updated, 'Product updated successfully');
 });
 
 export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const product = await Product.findByIdAndDelete(id);
   if (!product) {
     throw AppError.notFound('Product not found');
   }
+
+  recordActivity({
+    userId: req.user!.userId,
+    userEmail: req.user!.email,
+    userRole: req.user!.role,
+    action: 'PRODUCT_DELETED',
+    entityType: 'PRODUCT',
+    entityId: id,
+    entityTitle: product.name,
+    description: `Deleted product "${product.name}" permanently`,
+  });
+
   sendSuccess(res, null, 'Product deleted successfully');
 });

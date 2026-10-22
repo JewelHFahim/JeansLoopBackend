@@ -7,7 +7,7 @@ import {
   deleteCoupon,
   validateCoupon,
 } from '../controllers/coupon.controller';
-import { protect, admin } from '../middleware/auth';
+import { protect, admin, checkPermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
   createCouponSchema,
@@ -20,11 +20,11 @@ const router = Router();
 // Public validation endpoint for checkout
 router.post('/validate', validate(validateCouponSchema), validateCoupon);
 
-// Protected admin endpoints (Critical fix from code review)
-router.get('/', protect, admin, getCoupons);
-router.get('/:id', protect, admin, getCouponById);
-router.post('/', protect, admin, validate(createCouponSchema), createCoupon);
-router.put('/:id', protect, admin, validate(updateCouponSchema), updateCoupon);
-router.delete('/:id', protect, admin, deleteCoupon);
+// Protected admin & staff endpoints (Coupons management)
+router.get('/', protect, admin, checkPermission('coupons'), getCoupons);
+router.get('/:id', protect, admin, checkPermission('coupons'), getCouponById);
+router.post('/', protect, admin, checkPermission('coupons'), validate(createCouponSchema), createCoupon);
+router.put('/:id', protect, admin, checkPermission('coupons'), validate(updateCouponSchema), updateCoupon);
+router.delete('/:id', protect, admin, checkPermission('coupons'), deleteCoupon);
 
 export default router;

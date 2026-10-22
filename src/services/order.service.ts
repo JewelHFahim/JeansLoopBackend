@@ -126,7 +126,11 @@ export async function restoreOrderStock(order: IOrder): Promise<void> {
 /**
  * Updates order status and handles stock adjustment on cancellation.
  */
-export async function updateOrderStatus(orderId: string, newStatus: IOrder['status']): Promise<IOrder> {
+export async function updateOrderStatus(
+  orderId: string,
+  newStatus: IOrder['status'],
+  operator?: { userId?: string; email?: string; name?: string }
+): Promise<IOrder> {
   const order = await Order.findById(orderId);
   if (!order) {
     throw AppError.notFound('Order not found');
@@ -139,6 +143,17 @@ export async function updateOrderStatus(orderId: string, newStatus: IOrder['stat
     order.isDelivered = true;
     order.deliveredAt = new Date();
   }
+
+  // Record into order's own chronological status history
+  if (!order.statusHistory) {
+    order.statusHistory = [];
+  }
+  order.statusHistory.push({
+    status: newStatus,
+    changedBy: operator?.email || 'admin@jeansloop.com',
+    changedByName: operator?.name || 'Staff / Admin',
+    changedAt: new Date(),
+  });
 
   // If cancelling or returning from an active state, restore inventory
   if ((newStatus === 'CANCELLED' || newStatus === 'RETURNED') && previousStatus !== 'CANCELLED' && previousStatus !== 'RETURNED') {

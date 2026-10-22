@@ -49,6 +49,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
       phone: u.phone,
       address: u.address,
       role: u.role,
+      permissions: u.permissions || [],
       orderCount: stats.count,
       totalSpent: stats.totalSpent,
       createdAt: u.createdAt,
@@ -61,6 +62,87 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
     total,
     pages: Math.ceil(total / limit) || 1,
   });
+});
+
+export const createUser = asyncHandler(async (req: Request, res: Response) => {
+  const { name, email, password, phone, role, permissions } = req.body;
+
+  if (!name || !email || !password) {
+    throw AppError.badRequest('Name, email, and password are required');
+  }
+
+  if (password.length < 8) {
+    throw AppError.badRequest('Password must be at least 8 characters');
+  }
+
+  const existing = await User.findOne({ email: email.toLowerCase().trim() });
+  if (existing) {
+    throw AppError.conflict('An account with this email already exists');
+  }
+
+  const assignedRole = role && ['ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER'].includes(role) ? role : 'MANAGER';
+  const assignedPermissions = Array.isArray(permissions) ? permissions : ['orders', 'products'];
+
+  const user = await User.create({
+    name: name.trim(),
+    email: email.toLowerCase().trim(),
+    password,
+    phone: phone?.trim(),
+    role: assignedRole,
+    permissions: assignedPermissions,
+  });
+
+  sendSuccess(
+    res,
+    {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      permissions: user.permissions,
+      createdAt: user.createdAt,
+    },
+    'Staff / User account created successfully',
+    201
+  );
+});
+
+export const updateUserRole = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { role, permissions } = req.body;
+
+  if (!role || !['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER'].includes(role)) {
+    throw AppError.badRequest('Valid role is required');
+  }
+
+  // Prevent self-demotion
+  if (id === req.user!.userId && role !== req.user!.role) {
+    throw AppError.badRequest('You cannot modify your own administrative role');
+  }
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw AppError.notFound('User not found');
+  }
+
+  user.role = role;
+  if (Array.isArray(permissions)) {
+    user.permissions = permissions;
+  }
+  await user.save();
+
+  sendSuccess(
+    res,
+    {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      permissions: user.permissions,
+    },
+    'User role and access permissions updated'
+  );
 });
 
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {

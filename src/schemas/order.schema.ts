@@ -45,6 +45,11 @@ export const orderQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(10),
   keyword: z.string().trim().optional(),
   status: z.enum(['PENDING', 'ACCEPTED', 'COURIERED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'EXCHANGE']).optional(),
+  paymentMethod: z.enum(['cod', 'bkash', 'card']).optional(),
+  isPaid: z.coerce.boolean().optional(),
+  city: z.string().trim().optional(),
+  zone: z.enum(['all', 'dhaka', 'outside_dhaka']).optional(),
+  dateRange: z.enum(['all', 'today', 'yesterday', '7days', '30days']).optional(),
 });
 
 export type OrderItemInput = z.infer<typeof orderItemInputSchema>;

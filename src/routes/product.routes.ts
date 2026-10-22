@@ -7,7 +7,7 @@ import {
   updateProduct,
   deleteProduct,
 } from '../controllers/product.controller';
-import { protect, admin } from '../middleware/auth';
+import { protect, admin, checkPermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
   createProductSchema,
@@ -22,9 +22,9 @@ router.get('/', validate(productQuerySchema, 'query'), getProducts);
 router.get('/details/:id', getProductById);
 router.get('/:slug', getProductBySlug);
 
-// Protected admin routes
-router.post('/', protect, admin, validate(createProductSchema), createProduct);
-router.put('/:id', protect, admin, validate(updateProductSchema), updateProduct);
-router.delete('/:id', protect, admin, deleteProduct);
+// Protected admin & staff routes (Products management)
+router.post('/', protect, admin, checkPermission('products'), validate(createProductSchema), createProduct);
+router.put('/:id', protect, admin, checkPermission('products'), validate(updateProductSchema), updateProduct);
+router.delete('/:id', protect, admin, checkPermission('products'), deleteProduct);
 
 export default router;

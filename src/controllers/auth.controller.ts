@@ -56,6 +56,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
     name: user.name,
     email: user.email,
     role: user.role,
+    permissions: user.permissions || [],
     phone: user.phone,
     address: user.address,
     gender: user.gender,

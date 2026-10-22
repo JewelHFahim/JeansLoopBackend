@@ -31,6 +31,16 @@ export interface IProduct extends Document {
   variants: IProductVariant[];
   sizeChart: ISizeChartRow[];
   isDraft: boolean;
+  createdBy?: {
+    userId?: mongoose.Types.ObjectId;
+    name?: string;
+    email?: string;
+  };
+  updatedBy?: {
+    userId?: mongoose.Types.ObjectId;
+    name?: string;
+    email?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +83,16 @@ const ProductSchema = new Schema<IProduct>(
     variants: { type: [ProductVariantSchema], required: true },
     sizeChart: { type: [SizeChartRowSchema], default: [] },
     isDraft: { type: Boolean, default: false },
+    createdBy: {
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      name: { type: String },
+      email: { type: String },
+    },
+    updatedBy: {
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      name: { type: String },
+      email: { type: String },
+    },
   },
   {
     timestamps: true,

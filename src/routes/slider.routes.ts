@@ -7,7 +7,7 @@ import {
   updateSlider,
   deleteSlider,
 } from '../controllers/slider.controller';
-import { protect, admin } from '../middleware/auth';
+import { protect, admin, checkPermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createSliderSchema, updateSliderSchema } from '../schemas/slider.schema';
 
@@ -18,9 +18,9 @@ router.get('/active', getActiveSliders);
 router.get('/', getSliders);
 router.get('/:id', getSliderById);
 
-// Protected admin routes
-router.post('/', protect, admin, validate(createSliderSchema), createSlider);
-router.put('/:id', protect, admin, validate(updateSliderSchema), updateSlider);
-router.delete('/:id', protect, admin, deleteSlider);
+// Protected admin & staff routes (Hero Sliders management)
+router.post('/', protect, admin, checkPermission('sliders'), validate(createSliderSchema), createSlider);
+router.put('/:id', protect, admin, checkPermission('sliders'), validate(updateSliderSchema), updateSlider);
+router.delete('/:id', protect, admin, checkPermission('sliders'), deleteSlider);
 
 export default router;

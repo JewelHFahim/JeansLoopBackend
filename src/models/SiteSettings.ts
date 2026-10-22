@@ -8,6 +8,16 @@ export interface ISocialLinks {
   tiktok?: string;
 }
 
+export interface IFeaturedCategorySection {
+  enabled: boolean;
+  category: string;
+  title: string;
+  tagline: string;
+  badge: string;
+  bannerImage: string;
+  buttonText: string;
+}
+
 export interface ISiteSettings extends Document {
   title: string;
   tagline: string;
@@ -19,6 +29,7 @@ export interface ISiteSettings extends Document {
   businessHours: string;
   announcement: string;
   socialLinks: ISocialLinks;
+  featuredCategorySection: IFeaturedCategorySection;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +41,22 @@ const SocialLinksSchema = new Schema<ISocialLinks>(
     youtube: { type: String, default: '' },
     whatsapp: { type: String, default: '' },
     tiktok: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const FeaturedCategorySectionSchema = new Schema<IFeaturedCategorySection>(
+  {
+    enabled: { type: Boolean, default: true },
+    category: { type: String, default: 'Jeans' },
+    title: { type: String, default: 'Denim Jeans' },
+    tagline: { type: String, default: 'Authentic Raw Denim • Engineered for Durability' },
+    badge: { type: String, default: 'Featured Collection' },
+    bannerImage: {
+      type: String,
+      default: 'https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&q=80&w=1200',
+    },
+    buttonText: { type: String, default: 'Explore Collection' },
   },
   { _id: false }
 );
@@ -46,6 +73,7 @@ const SiteSettingsSchema = new Schema<ISiteSettings>(
     businessHours: { type: String, default: '10:00 AM - 08:00 PM' },
     announcement: { type: String, default: 'Welcome to JeansLoop — Premium Quality Guaranteed' },
     socialLinks: { type: SocialLinksSchema, default: () => ({}) },
+    featuredCategorySection: { type: FeaturedCategorySectionSchema, default: () => ({}) },
   },
   {
     timestamps: true,

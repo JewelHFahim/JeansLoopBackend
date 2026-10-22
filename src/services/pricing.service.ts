@@ -3,12 +3,12 @@ import { OrderItemInput } from '../schemas/order.schema';
 
 /**
  * Calculates delivery fee server-side based on recipient city/district.
- * Dhaka, Gazipur, Narayanganj = ৳70. All other districts = ৳140.
+ * Dhaka = ৳70. All other districts = ৳140.
  */
 export function calculateShippingFee(city: string): number {
   if (!city) return 140;
   const normalized = city.trim().toLowerCase();
-  if (normalized === 'dhaka' || normalized === 'gazipur' || normalized === 'narayanganj') {
+  if (normalized === 'dhaka' || normalized === 'dhaka city' || normalized === 'inside dhaka') {
     return 70;
   }
   return 140;

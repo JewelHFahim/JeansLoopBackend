@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { getUsers, deleteUser } from '../controllers/user.controller';
-import { protect, admin } from '../middleware/auth';
+import { getUsers, createUser, updateUserRole, deleteUser } from '../controllers/user.controller';
+import { protect, strictAdmin } from '../middleware/auth';
 
 const router = Router();
 
-// Protected admin endpoints
-router.get('/', protect, admin, getUsers);
-router.delete('/:id', protect, admin, deleteUser);
+// Protected full administrator endpoints
+router.get('/', protect, strictAdmin, getUsers);
+router.post('/', protect, strictAdmin, createUser);
+router.put('/:id/role', protect, strictAdmin, updateUserRole);
+router.delete('/:id', protect, strictAdmin, deleteUser);
 
 export default router;

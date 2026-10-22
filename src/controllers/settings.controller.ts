@@ -43,6 +43,13 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response) =
     };
   }
 
+  if (req.body.featuredCategorySection) {
+    settings.featuredCategorySection = {
+      ...(settings.featuredCategorySection || {}),
+      ...req.body.featuredCategorySection,
+    };
+  }
+
   const updated = await settings.save();
   sendSuccess(res, updated, 'Site settings updated successfully');
 });

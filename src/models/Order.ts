@@ -22,6 +22,14 @@ export interface IShippingAddress {
   note?: string;
 }
 
+export interface IOrderStatusHistory {
+  status: OrderStatus;
+  changedBy: string;
+  changedByName?: string;
+  changedAt: Date;
+  note?: string;
+}
+
 export interface IOrder extends Document {
   userId: mongoose.Types.ObjectId;
   items: IOrderItem[];
@@ -38,6 +46,7 @@ export interface IOrder extends Document {
   isDelivered: boolean;
   deliveredAt?: Date;
   status: OrderStatus;
+  statusHistory?: IOrderStatusHistory[];
   couponCode?: string;
   bkashNumber?: string;
   bkashTxnId?: string;
@@ -95,6 +104,15 @@ const OrderSchema = new Schema<IOrder>(
       enum: ['PENDING', 'ACCEPTED', 'COURIERED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'EXCHANGE'],
       default: 'PENDING',
     },
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        changedBy: { type: String, required: true },
+        changedByName: { type: String },
+        changedAt: { type: Date, default: Date.now },
+        note: { type: String },
+      },
+    ],
     couponCode: { type: String, uppercase: true, trim: true },
     bkashNumber: { type: String, trim: true },
     bkashTxnId: { type: String, trim: true },
