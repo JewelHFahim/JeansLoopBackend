@@ -28,6 +28,8 @@ export const updateSettingsSchema = z.object({
   locationMapUrl: z.string().trim().optional(),
   businessHours: z.string().trim().optional(),
   announcement: z.string().trim().optional(),
+  announcementEnabled: z.boolean().optional(),
+  announcementLink: z.string().trim().optional(),
   socialLinks: socialLinksSchema.partial().optional(),
   featuredCategorySection: featuredCategorySectionSchema.partial().optional(),
 });

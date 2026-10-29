@@ -28,6 +28,8 @@ export interface ISiteSettings extends Document {
   locationMapUrl: string;
   businessHours: string;
   announcement: string;
+  announcementEnabled: boolean;
+  announcementLink: string;
   socialLinks: ISocialLinks;
   featuredCategorySection: IFeaturedCategorySection;
   createdAt: Date;
@@ -72,6 +74,8 @@ const SiteSettingsSchema = new Schema<ISiteSettings>(
     locationMapUrl: { type: String, default: '' },
     businessHours: { type: String, default: '10:00 AM - 08:00 PM' },
     announcement: { type: String, default: 'Welcome to JeansLoop — Premium Quality Guaranteed' },
+    announcementEnabled: { type: Boolean, default: true },
+    announcementLink: { type: String, default: '' },
     socialLinks: { type: SocialLinksSchema, default: () => ({}) },
     featuredCategorySection: { type: FeaturedCategorySectionSchema, default: () => ({}) },
   },

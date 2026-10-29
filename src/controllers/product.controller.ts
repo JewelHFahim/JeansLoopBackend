@@ -41,8 +41,13 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
 
   // 2. Category filter
   if (queryInput.category && queryInput.category !== 'all') {
-    const escapedCat = escapeRegex(queryInput.category);
-    conditions.push({ category: { $regex: `^${escapedCat}$`, $options: 'i' } });
+    const cat = queryInput.category.toLowerCase();
+    if (cat === 'formal' || cat === 'trouser') {
+      conditions.push({ category: { $regex: '^(formal|trouser)$', $options: 'i' } });
+    } else {
+      const escapedCat = escapeRegex(queryInput.category);
+      conditions.push({ category: { $regex: `^${escapedCat}$`, $options: 'i' } });
+    }
   }
 
   // 3. Discount filter (doesn't overwrite keyword $or)

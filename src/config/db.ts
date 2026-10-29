@@ -3,22 +3,31 @@ import { env } from './env';
 
 let isConnected = false;
 
-export async function connectDB(): Promise<void> {
+export async function connectDB(retries = 100, delayMs = 3000): Promise<void> {
   if (isConnected) return;
 
-  try {
-    mongoose.set('strictQuery', true);
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      mongoose.set('strictQuery', true);
 
-    await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
+      await mongoose.connect(env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
 
-    isConnected = true;
-    console.log(`✅  MongoDB connected: ${mongoose.connection.host}`);
-  } catch (error) {
-    console.error('❌  MongoDB connection failed:', error);
-    process.exit(1);
+      isConnected = true;
+      console.log(`✅  MongoDB connected: ${mongoose.connection.host}`);
+      return;
+    } catch (error: any) {
+      console.error(`❌  MongoDB connection failed (attempt ${attempt}/${retries}):`, error.message || error);
+      if (attempt < retries) {
+        console.log(`⏳  Retrying database connection in ${delayMs / 1000}s...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      } else {
+        console.error('💥  All MongoDB connection attempts exhausted.');
+        process.exit(1);
+      }
+    }
   }
 }
 

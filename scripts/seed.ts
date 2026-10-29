@@ -23,7 +23,7 @@ async function seed() {
     const categoriesData = [
       { name: 'Jeans', slug: 'jeans', description: 'Premium stretch and raw denim jeans', order: 1 },
       { name: 'Twill', slug: 'twill', description: 'Tailored twill and chino pants', order: 2 },
-      { name: 'Trouser', slug: 'trouser', description: 'Smart casual and formal trousers', order: 3 },
+      { name: 'Formal', slug: 'formal', description: 'Smart casual and formal trousers', order: 3 },
     ];
 
     for (const cat of categoriesData) {
@@ -67,7 +67,7 @@ async function seed() {
         title: 'Modern Tailoring',
         subtitle: 'Precision fit trousers and twill pants for contemporary gentlemen.',
         image: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=1920&auto=format&fit=crop',
-        primaryCta: { text: 'Explore Trousers', href: '/shop?category=trouser' },
+        primaryCta: { text: 'Explore Formal', href: '/shop?category=formal' },
         secondaryCta: null,
         order: 2,
         isActive: true,

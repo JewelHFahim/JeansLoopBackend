@@ -28,6 +28,8 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response) =
     'locationMapUrl',
     'businessHours',
     'announcement',
+    'announcementEnabled',
+    'announcementLink',
   ] as const;
 
   for (const key of allowedKeys) {
