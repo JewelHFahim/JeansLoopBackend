@@ -37,4 +37,8 @@ export class AppError extends Error {
   static conflict(message: string, code = 'CONFLICT') {
     return new AppError(message, 409, code);
   }
+
+  static internal(message = 'Internal server error', code = 'INTERNAL_ERROR') {
+    return new AppError(message, 500, code);
+  }
 }

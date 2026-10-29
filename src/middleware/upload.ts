@@ -11,32 +11,52 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Memory storage so we can inspect magic bytes before persisting or uploading to Cloudinary
+// Memory storage so we can validate and optimize via Sharp in-memory before writing to local disk or Cloudinary
 const storage = multer.memoryStorage();
 
-const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
-const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
+export const allowedMimeTypes = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+];
+
+export const allowedExtensions = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.avif',
+  '.heic',
+  '.heif',
+];
 
 export const uploadMiddleware = multer({
   storage,
   limits: {
-    fileSize: 8 * 1024 * 1024, // 8 MB
+    fileSize: 15 * 1024 * 1024, // 15 MB to comfortably accept modern high-res iPhone photos
     files: 10,
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!allowedExtensions.includes(ext) || !allowedMimeTypes.includes(file.mimetype)) {
-      return cb(AppError.badRequest('Only image files (JPEG, PNG, WebP, AVIF) are allowed'));
+      return cb(
+        AppError.badRequest(
+          `Only image files (JPEG, PNG, WebP, AVIF, HEIC) are allowed. Received: ${file.originalname}`
+        )
+      );
     }
     cb(null, true);
   },
 });
 
 /**
- * Detects MIME type by inspecting buffer magic bytes (JPEG, PNG, WebP, AVIF).
- * Rock-solid native buffer inspection that avoids ESM-only package issues in CommonJS.
+ * Detects MIME type by inspecting buffer magic bytes (JPEG, PNG, WebP, AVIF, HEIC/HEIF).
+ * Rock-solid native buffer inspection that avoids ESM-only package issues.
  */
-function detectImageMime(buffer: Buffer): string | null {
+export function detectImageMime(buffer: Buffer): string | null {
   if (!buffer || buffer.length < 12) return null;
 
   // JPEG: FF D8 FF
@@ -65,12 +85,15 @@ function detectImageMime(buffer: Buffer): string | null {
     return 'image/webp';
   }
 
-  // AVIF: buffer[4..8] is 'ftyp'
+  // AVIF / HEIC / HEIF: buffer[4..8] is 'ftyp'
   const ftyp = buffer.toString('ascii', 4, 8);
   if (ftyp === 'ftyp') {
-    const brand = buffer.toString('ascii', 8, 12);
-    if (brand === 'avif' || brand === 'avis' || brand === 'mif1') {
+    const brand = buffer.toString('ascii', 8, 12).toLowerCase();
+    if (['avif', 'avis'].includes(brand)) {
       return 'image/avif';
+    }
+    if (['heic', 'heix', 'hevc', 'heim', 'msf1', 'mif1'].includes(brand)) {
+      return 'image/heic';
     }
   }
 
@@ -80,7 +103,11 @@ function detectImageMime(buffer: Buffer): string | null {
 /**
  * Validates actual binary content via magic bytes to prevent file extension spoofing.
  */
-export async function validateMagicBytes(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function validateMagicBytes(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> {
   const files: Express.Multer.File[] = [];
 
   if (req.file) {
@@ -94,7 +121,11 @@ export async function validateMagicBytes(req: Request, _res: Response, next: Nex
   for (const file of files) {
     const detectedMime = detectImageMime(file.buffer);
     if (!detectedMime || !allowedMimeTypes.includes(detectedMime)) {
-      return next(AppError.badRequest(`File content in "${file.originalname}" does not match a valid image type.`));
+      return next(
+        AppError.badRequest(
+          `File content in "${file.originalname}" does not match a valid image format.`
+        )
+      );
     }
   }
 
@@ -103,12 +134,15 @@ export async function validateMagicBytes(req: Request, _res: Response, next: Nex
 
 /**
  * Helper to sanitize filenames to prevent path traversal or special character execution.
+ * Allows specifying a target output extension (e.g. '.webp').
  */
-export function sanitizeSafeFilename(originalName: string): string {
+export function sanitizeSafeFilename(originalName: string, targetExtension?: string): string {
   const ext = path.extname(originalName).toLowerCase();
   const baseName = path.basename(originalName, ext);
   const cleanBase = sanitizeFilename(baseName).replace(/[^a-zA-Z0-9_-]/g, '_');
   const timestamp = Date.now();
   const randomSuffix = Math.floor(Math.random() * 10000);
-  return `${timestamp}-${randomSuffix}-${cleanBase || 'upload'}${ext}`;
+  const finalExt = targetExtension !== undefined ? targetExtension : ext;
+  const formattedExt = finalExt ? (finalExt.startsWith('.') ? finalExt : `.${finalExt}`) : '';
+  return `${timestamp}-${randomSuffix}-${cleanBase || 'upload'}${formattedExt}`;
 }

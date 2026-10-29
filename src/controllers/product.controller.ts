@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 import { recordActivity } from '../services/activity.service';
 import { escapeRegex } from '../utils/escapeRegex';
 import { ProductQueryInput } from '../schemas/product.schema';
+import { deleteLocalImage } from '../services/image.service';
 
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const queryInput = req.query as unknown as ProductQueryInput;
@@ -187,6 +188,20 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
   const product = await Product.findByIdAndDelete(id);
   if (!product) {
     throw AppError.notFound('Product not found');
+  }
+
+  // File cleanup: delete product images from local storage if not referenced by any other product
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    for (const imgUrl of product.images) {
+      try {
+        const stillInUse = await Product.exists({ images: imgUrl });
+        if (!stillInUse) {
+          await deleteLocalImage(imgUrl);
+        }
+      } catch (err) {
+        console.warn(`[deleteProduct] Image cleanup error for "${imgUrl}":`, err);
+      }
+    }
   }
 
   recordActivity({

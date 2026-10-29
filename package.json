@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "seed": "ts-node scripts/seed.ts",
     "seed:admin": "ts-node scripts/seedAdmin.ts",
+    "optimize:images": "ts-node scripts/optimizeExistingImages.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "sanitize-filename": "^1.6.3",
+    "sharp": "^0.35.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
