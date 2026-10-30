@@ -4,7 +4,7 @@ export const createCategorySchema = z.object({
   name: z.string().trim().min(2, 'Category name must be at least 2 characters'),
   slug: z.string().trim().min(2, 'Slug is required'),
   description: z.string().trim().optional().default(''),
-  image: z.string().url().optional(),
+  image: z.string().trim().optional().or(z.literal('')),
   order: z.number().int().default(0),
 });
 
