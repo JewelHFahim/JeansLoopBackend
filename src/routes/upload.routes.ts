@@ -23,7 +23,7 @@ router.post(
   protect,
   admin,
   uploadLimiter,
-  uploadMiddleware.array('images', 10),
+  uploadMiddleware.array('images', 6),
   validateMagicBytes,
   uploadMultipleImages
 );

@@ -104,7 +104,11 @@ ProductSchema.index({ category: 1, isDraft: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ discountedPrice: 1 });
 ProductSchema.index({ createdAt: -1 });
-ProductSchema.index({ name: 'text', description: 'text' });
+ProductSchema.index({ 'variants.sku': 1 });
+ProductSchema.index(
+  { name: 'text', 'variants.sku': 'text', category: 'text', description: 'text' },
+  { weights: { name: 10, 'variants.sku': 5, category: 3, description: 1 } }
+);
 
 // Auto-calculate discountedPrice before saving
 ProductSchema.pre<IProduct>('save', function (next) {

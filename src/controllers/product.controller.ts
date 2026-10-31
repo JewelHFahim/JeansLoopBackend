@@ -26,15 +26,15 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     conditions.push({ isDraft: false });
   }
 
-  // 1. Keyword search with ReDoS protection
+  // 1. High-performance keyword search utilizing compound text index
   if (queryInput.keyword) {
-    const escaped = escapeRegex(queryInput.keyword);
+    const rawKeyword = queryInput.keyword.trim();
+    const escaped = escapeRegex(rawKeyword);
     conditions.push({
       $or: [
+        { $text: { $search: rawKeyword } },
         { name: { $regex: escaped, $options: 'i' } },
-        { description: { $regex: escaped, $options: 'i' } },
-        { category: { $regex: escaped, $options: 'i' } },
-        { 'variants.sku': { $regex: escaped, $options: 'i' } },
+        { 'variants.sku': { $regex: `^${escaped}`, $options: 'i' } },
       ],
     });
   }

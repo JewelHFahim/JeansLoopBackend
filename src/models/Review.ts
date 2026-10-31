@@ -59,7 +59,7 @@ const ReviewSchema = new Schema<IReview>(
     },
     verifiedPurchase: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     helpfulCount: {
       type: Number,

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Review } from '../models/Review';
 import { Product } from '../models/Product';
+import { Order } from '../models/Order';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/apiResponse';
 import { AppError } from '../utils/AppError';
@@ -27,32 +28,7 @@ export const getProductReviews = asyncHandler(async (req: Request, res: Response
 
   const targetProductId = await resolveProductId(productIdOrSlug);
 
-  // 1. Calculate aggregated summary for all reviews of this product
-  const allProductReviews = await Review.find({ productId: targetProductId }).select('rating fit helpfulCount');
-
-  const totalReviews = allProductReviews.length;
-  let averageRating = 0;
-  const ratingBreakdown: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-  const fitBreakdown: Record<string, number> = { true_to_size: 0, runs_small: 0, runs_large: 0 };
-
-  if (totalReviews > 0) {
-    let sum = 0;
-    allProductReviews.forEach((r) => {
-      sum += r.rating;
-      if (ratingBreakdown[r.rating] !== undefined) {
-        ratingBreakdown[r.rating] += 1;
-      }
-      if (r.fit && fitBreakdown[r.fit] !== undefined) {
-        fitBreakdown[r.fit] += 1;
-      }
-    });
-    averageRating = Number((sum / totalReviews).toFixed(1));
-  }
-
-  const highRatingsCount = (ratingBreakdown[5] || 0) + (ratingBreakdown[4] || 0);
-  const recommendPercentage = totalReviews > 0 ? Math.round((highRatingsCount / totalReviews) * 100) : 100;
-
-  // 2. Query filtered & sorted reviews list
+  // 1. Query filter & sorting options for paginated review list
   const filter: any = { productId: targetProductId };
   if (queryInput.rating) {
     filter.rating = Number(queryInput.rating);
@@ -71,10 +47,60 @@ export const getProductReviews = asyncHandler(async (req: Request, res: Response
   const limit = Number(queryInput.limit) || 20;
   const skip = (page - 1) * limit;
 
-  const [reviews, filteredTotal] = await Promise.all([
+  // 2. Execute parallel aggregation pipeline & paginated slice directly inside MongoDB engine
+  const [statsResult, reviews, filteredTotal] = await Promise.all([
+    Review.aggregate([
+      { $match: { productId: targetProductId } },
+      {
+        $group: {
+          _id: null,
+          totalReviews: { $sum: 1 },
+          averageRating: { $avg: '$rating' },
+          rating5: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+          rating4: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+          rating3: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+          rating2: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+          rating1: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+          fitTrue: { $sum: { $cond: [{ $eq: ['$fit', 'true_to_size'] }, 1, 0] } },
+          fitSmall: { $sum: { $cond: [{ $eq: ['$fit', 'runs_small'] }, 1, 0] } },
+          fitLarge: { $sum: { $cond: [{ $eq: ['$fit', 'runs_large'] }, 1, 0] } },
+        },
+      },
+    ]),
     Review.find(filter).sort(sortOption).skip(skip).limit(limit),
     Review.countDocuments(filter),
   ]);
+
+  const summaryData = statsResult[0] || {
+    totalReviews: 0,
+    averageRating: 0,
+    rating5: 0,
+    rating4: 0,
+    rating3: 0,
+    rating2: 0,
+    rating1: 0,
+    fitTrue: 0,
+    fitSmall: 0,
+    fitLarge: 0,
+  };
+
+  const totalReviews = summaryData.totalReviews || 0;
+  const averageRating = Number((summaryData.averageRating || 0).toFixed(1));
+  const ratingBreakdown: Record<number, number> = {
+    5: summaryData.rating5 || 0,
+    4: summaryData.rating4 || 0,
+    3: summaryData.rating3 || 0,
+    2: summaryData.rating2 || 0,
+    1: summaryData.rating1 || 0,
+  };
+  const fitBreakdown: Record<string, number> = {
+    true_to_size: summaryData.fitTrue || 0,
+    runs_small: summaryData.fitSmall || 0,
+    runs_large: summaryData.fitLarge || 0,
+  };
+
+  const highRatingsCount = (ratingBreakdown[5] || 0) + (ratingBreakdown[4] || 0);
+  const recommendPercentage = totalReviews > 0 ? Math.round((highRatingsCount / totalReviews) * 100) : 100;
 
   return sendSuccess(
     res,
@@ -102,6 +128,33 @@ export const createProductReview = asyncHandler(async (req: Request, res: Respon
   const body = req.body as CreateReviewInput;
   const targetProductId = await resolveProductId(body.productId);
 
+  // Authenticate buyer verification dynamically from historical completed orders
+  let verifiedPurchase = false;
+
+  if (req.user?.userId) {
+    const matchingOrder = await Order.exists({
+      userId: req.user.userId,
+      'items.productId': targetProductId,
+      status: { $in: ['DELIVERED', 'COURIERED', 'ACCEPTED'] },
+    });
+    if (matchingOrder) {
+      verifiedPurchase = true;
+    }
+  } else if (body.email) {
+    // If guest provided an email, check if any completed order matches this email
+    const matchingOrder = await Order.exists({
+      $or: [
+        { 'shippingAddress.phone': body.email },
+        { bkashNumber: body.email },
+      ],
+      'items.productId': targetProductId,
+      status: { $in: ['DELIVERED', 'COURIERED', 'ACCEPTED'] },
+    });
+    if (matchingOrder) {
+      verifiedPurchase = true;
+    }
+  }
+
   const review = await Review.create({
     productId: targetProductId,
     name: body.name.trim(),
@@ -110,7 +163,7 @@ export const createProductReview = asyncHandler(async (req: Request, res: Respon
     title: body.title.trim(),
     comment: body.comment.trim(),
     fit: body.fit || 'true_to_size',
-    verifiedPurchase: true,
+    verifiedPurchase,
     helpfulCount: 0,
   });
 

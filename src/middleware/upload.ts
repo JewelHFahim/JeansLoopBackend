@@ -36,8 +36,8 @@ export const allowedExtensions = [
 export const uploadMiddleware = multer({
   storage,
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15 MB to comfortably accept modern high-res iPhone photos
-    files: 10,
+    fileSize: 8 * 1024 * 1024, // 8 MB limit per image to safeguard memory
+    files: 6, // Up to 6 images per batch upload
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();

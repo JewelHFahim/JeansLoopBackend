@@ -27,3 +27,12 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Upload limit reached, please try again in an hour', code: 'UPLOAD_RATE_LIMITED' },
 });
+
+/** Review action limiter: 15 review submissions/votes per hour per IP */
+export const reviewLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many review requests, please try again later', code: 'REVIEW_RATE_LIMITED' },
+});

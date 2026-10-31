@@ -127,6 +127,8 @@ const OrderSchema = new Schema<IOrder>(
 // Compound Indexes for fast queries
 OrderSchema.index({ userId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ isPaid: 1, createdAt: -1 });
+OrderSchema.index({ 'items.productId': 1, status: 1 });
 OrderSchema.index({ 'shippingAddress.city': 1 });
 OrderSchema.index({ createdAt: -1 });
 

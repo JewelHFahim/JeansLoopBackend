@@ -5,8 +5,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { User } from '../models/User';
 
 /**
- * protect — verifies the Bearer token and attaches req.user.
- * Returns 401 if token is missing or invalid.
+ * protect — verifies the Bearer token, ensures user exists in DB, and attaches current role & permissions.
+ * Returns 401 if token is missing, invalid, expired, or if account was deleted/revoked.
  */
 export const protect = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -17,22 +17,43 @@ export const protect = asyncHandler(async (req: Request, _res: Response, next: N
 
   const token = authHeader.split(' ')[1];
 
+  let payload;
   try {
-    const payload = verifyAccessToken(token);
-    req.user = payload;
-
-    // Dynamically ensure permissions and latest role are synced from DB for staff accounts
-    if (['MANAGER', 'STAFF'].includes(req.user.role) && (!req.user.permissions || req.user.permissions.length === 0)) {
-      const dbUser = await User.findById(req.user.userId).select('permissions role');
-      if (dbUser) {
-        req.user.permissions = dbUser.permissions || [];
-        req.user.role = dbUser.role;
-      }
-    }
+    payload = verifyAccessToken(token);
   } catch {
     throw AppError.unauthorized('Token is invalid or expired');
   }
 
+  // Verify user still exists in the database and synchronize real-time role & permissions
+  const dbUser = await User.findById(payload.userId).select('role permissions email');
+  if (!dbUser) {
+    throw AppError.unauthorized('User account associated with this token no longer exists');
+  }
+
+  req.user = {
+    userId: payload.userId,
+    email: dbUser.email,
+    role: dbUser.role,
+    permissions: dbUser.permissions || [],
+  };
+
+  return next();
+});
+
+/**
+ * optionalAuth — extracts and attaches req.user if a valid token is present, but does not block requests without one.
+ */
+export const optionalAuth = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const payload = verifyAccessToken(token);
+      req.user = payload;
+    } catch {
+      // Silently proceed for optional auth
+    }
+  }
   return next();
 });
 

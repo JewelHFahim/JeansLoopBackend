@@ -32,9 +32,10 @@ export async function validateAndApplyCoupon(
 
   let discountAmount = 0;
   if (coupon.type === 'percentage') {
-    discountAmount = (subtotal * coupon.value) / 100;
+    const safePercent = Math.min(100, Math.max(0, coupon.value));
+    discountAmount = (subtotal * safePercent) / 100;
   } else {
-    discountAmount = coupon.value;
+    discountAmount = Math.max(0, coupon.value);
   }
 
   // Discount cannot exceed subtotal

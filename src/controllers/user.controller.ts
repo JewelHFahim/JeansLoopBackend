@@ -80,6 +80,14 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     throw AppError.conflict('An account with this email already exists');
   }
 
+  if (role === 'SUPER_ADMIN') {
+    throw AppError.forbidden('Super Admin accounts can only be provisioned via the secure server CLI');
+  }
+
+  if (role === 'ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    throw AppError.forbidden('Only a Super Admin can create another Administrator account');
+  }
+
   const assignedRole = role && ['ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER'].includes(role) ? role : 'MANAGER';
   const assignedPermissions = Array.isArray(permissions) ? permissions : ['orders', 'products'];
 
@@ -116,7 +124,7 @@ export const updateUserRole = asyncHandler(async (req: Request, res: Response) =
     throw AppError.badRequest('Valid role is required');
   }
 
-  // Prevent self-demotion
+  // Prevent self-demotion or self-modification
   if (id === req.user!.userId && role !== req.user!.role) {
     throw AppError.badRequest('You cannot modify your own administrative role');
   }
@@ -124,6 +132,23 @@ export const updateUserRole = asyncHandler(async (req: Request, res: Response) =
   const user = await User.findById(id);
   if (!user) {
     throw AppError.notFound('User not found');
+  }
+
+  // Role promotion/modification safeguards
+  if (role === 'SUPER_ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    throw AppError.forbidden('Only a Super Admin can promote an account to Super Admin');
+  }
+
+  if (user.role === 'SUPER_ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    throw AppError.forbidden('Only a Super Admin can modify an existing Super Admin account');
+  }
+
+  // Prevent demoting the last active Super Admin
+  if (user.role === 'SUPER_ADMIN' && role !== 'SUPER_ADMIN') {
+    const superAdminCount = await User.countDocuments({ role: 'SUPER_ADMIN' });
+    if (superAdminCount <= 1) {
+      throw AppError.badRequest('Cannot demote the last remaining Super Admin in the system');
+    }
   }
 
   user.role = role;
@@ -153,10 +178,25 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     throw AppError.badRequest('You cannot delete your own account');
   }
 
-  const user = await User.findByIdAndDelete(id);
+  const user = await User.findById(id);
   if (!user) {
     throw AppError.notFound('User not found');
   }
+
+  // Prevent non-super-admins from deleting super-admins
+  if (user.role === 'SUPER_ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    throw AppError.forbidden('Only a Super Admin can delete a Super Admin account');
+  }
+
+  // Prevent deleting the last Super Admin
+  if (user.role === 'SUPER_ADMIN') {
+    const superAdminCount = await User.countDocuments({ role: 'SUPER_ADMIN' });
+    if (superAdminCount <= 1) {
+      throw AppError.badRequest('Cannot delete the last remaining Super Admin in the system');
+    }
+  }
+
+  await User.findByIdAndDelete(id);
 
   sendSuccess(res, null, 'User deleted successfully');
 });

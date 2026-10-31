@@ -53,14 +53,23 @@ export async function createOrder(userId: string, input: CreateOrderInput): Prom
       image: item.image || product.images[0],
     });
 
-    // Prepare atomic stock decrement
+    // Prepare atomic stock decrement with non-negative guard
     if (variant) {
       stockBulkOperations.push({
         updateOne: {
-          filter: { _id: product._id, 'variants.sku': variant.sku },
+          filter: {
+            _id: product._id,
+            'variants.sku': variant.sku,
+            'variants.stock': { $gte: item.quantity },
+          },
           update: { $inc: { 'variants.$.stock': -item.quantity } },
         },
       });
+    } else if (product.variants && product.variants.length > 0) {
+      throw AppError.badRequest(
+        `Selected size/variant "${item.variantSku}" for "${product.name}" was not found`,
+        'INVALID_VARIANT'
+      );
     }
   }
 
@@ -79,32 +88,72 @@ export async function createOrder(userId: string, input: CreateOrderInput): Prom
   const taxPrice = 0;
   const totalAmount = Math.max(0, calculatedItemsPrice + shippingPrice + taxPrice - calculatedDiscount);
 
-  // 5. Decrement inventory atomically via bulkWrite
+  // 5. Decrement inventory atomically via bulkWrite with overselling protection
+  let stockDecremented = false;
   if (stockBulkOperations.length > 0) {
-    await Product.bulkWrite(stockBulkOperations);
+    const bulkWriteResult = await Product.bulkWrite(stockBulkOperations);
+    if (bulkWriteResult.modifiedCount !== stockBulkOperations.length) {
+      // Revert any partially decremented items if one item was insufficient
+      try {
+        const revertOps = stockBulkOperations.map((op: any) => ({
+          updateOne: {
+            filter: { _id: op.updateOne.filter._id, 'variants.sku': op.updateOne.filter['variants.sku'] },
+            update: { $inc: { 'variants.$.stock': Math.abs(op.updateOne.update.$inc['variants.$.stock']) } },
+          },
+        }));
+        await Product.bulkWrite(revertOps);
+      } catch (revertErr) {
+        console.error('[createOrder] Revert error on stock conflict:', revertErr);
+      }
+
+      throw AppError.badRequest(
+        'One or more selected items were just purchased by another customer and are now out of stock. Please refresh your cart.',
+        'INSUFFICIENT_STOCK'
+      );
+    }
+    stockDecremented = true;
   }
 
-  // 6. Create order
-  const order = new Order({
-    userId: new mongoose.Types.ObjectId(userId),
-    items: verifiedItems,
-    shippingAddress: input.shippingAddress,
-    itemsPrice: calculatedItemsPrice,
-    shippingPrice,
-    taxPrice,
-    discountAmount: calculatedDiscount,
-    totalAmount,
-    paymentMethod: input.paymentMethod,
-    couponCode: appliedCouponCode,
-    bkashNumber: input.bkashNumber,
-    bkashTxnId: input.bkashTxnId,
-    status: 'PENDING',
-  });
+  // 6. Create order with automated stock rollback guarantee if saving fails
+  try {
+    const order = new Order({
+      userId: new mongoose.Types.ObjectId(userId),
+      items: verifiedItems,
+      shippingAddress: input.shippingAddress,
+      itemsPrice: calculatedItemsPrice,
+      shippingPrice,
+      taxPrice,
+      discountAmount: calculatedDiscount,
+      totalAmount,
+      paymentMethod: input.paymentMethod,
+      couponCode: appliedCouponCode,
+      bkashNumber: input.bkashNumber,
+      bkashTxnId: input.bkashTxnId,
+      status: 'PENDING',
+    });
 
-  const savedOrder = await order.save();
-  invalidateStatsCache();
+    const savedOrder = await order.save();
+    invalidateStatsCache();
 
-  return savedOrder;
+    return savedOrder;
+  } catch (saveError) {
+    // If order creation fails after inventory deduction, restore inventory immediately
+    if (stockDecremented && stockBulkOperations.length > 0) {
+      try {
+        const rollbackOps = stockBulkOperations.map((op: any) => ({
+          updateOne: {
+            filter: { _id: op.updateOne.filter._id, 'variants.sku': op.updateOne.filter['variants.sku'] },
+            update: { $inc: { 'variants.$.stock': Math.abs(op.updateOne.update.$inc['variants.$.stock']) } },
+          },
+        }));
+        await Product.bulkWrite(rollbackOps);
+        console.warn(`[createOrder] Successfully restored inventory after order save failure.`);
+      } catch (rollbackErr) {
+        console.error('[createOrder] CRITICAL: Failed to rollback stock after order save failure:', rollbackErr);
+      }
+    }
+    throw saveError;
+  }
 }
 
 /**
