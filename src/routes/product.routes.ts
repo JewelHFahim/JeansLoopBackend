@@ -3,6 +3,7 @@ import {
   getProducts,
   getProductBySlug,
   getProductById,
+  getProductSizes,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -18,6 +19,7 @@ import {
 const router = Router();
 
 // Public store routes
+router.get('/sizes', getProductSizes);
 router.get('/', validate(productQuerySchema, 'query'), getProducts);
 router.get('/details/:id', getProductById);
 router.get('/:slug', getProductBySlug);

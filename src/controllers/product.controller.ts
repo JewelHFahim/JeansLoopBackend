@@ -69,9 +69,21 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     conditions.push({ price: priceFilter });
   }
 
-  // 5. Size filter on variants array
+  // 5. Size filter on variants array (supports single, comma-separated, case-insensitive)
   if (queryInput.size) {
-    conditions.push({ 'variants.size': queryInput.size });
+    const rawSizes = queryInput.size
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (rawSizes.length === 1) {
+      conditions.push({ 'variants.size': { $regex: `^${escapeRegex(rawSizes[0])}$`, $options: 'i' } });
+    } else if (rawSizes.length > 1) {
+      conditions.push({
+        'variants.size': {
+          $in: rawSizes.map((s) => new RegExp(`^${escapeRegex(s)}$`, 'i')),
+        },
+      });
+    }
   }
 
   // 6. Stock status filter
@@ -221,4 +233,50 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
   });
 
   sendSuccess(res, null, 'Product deleted successfully');
+});
+
+export const getProductSizes = asyncHandler(async (req: Request, res: Response) => {
+  const category = req.query.category as string | undefined;
+  const filter: any = { isDraft: false };
+
+  if (category && category !== 'all') {
+    const cat = category.toLowerCase();
+    if (cat === 'formal' || cat === 'trouser') {
+      filter.category = { $regex: '^(formal|trouser)$', $options: 'i' };
+    } else {
+      filter.category = { $regex: `^${escapeRegex(category)}$`, $options: 'i' };
+    }
+  }
+
+  const sizes = await Product.distinct('variants.size', filter);
+
+  // Filter out blanks and sort: numeric waist sizes ascending, then letter sizes
+  const validSizes = sizes.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+  const sizeOrder: Record<string, number> = {
+    xs: 1,
+    s: 2,
+    m: 3,
+    l: 4,
+    xl: 5,
+    '2xl': 6,
+    xxl: 6,
+    '3xl': 7,
+    xxxl: 7,
+  };
+
+  validSizes.sort((a, b) => {
+    const numA = parseFloat(a);
+    const numB = parseFloat(b);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    if (!isNaN(numA)) return -1;
+    if (!isNaN(numB)) return 1;
+
+    const rankA = sizeOrder[a.toLowerCase()] ?? 99;
+    const rankB = sizeOrder[b.toLowerCase()] ?? 99;
+    if (rankA !== rankB) return rankA - rankB;
+
+    return a.localeCompare(b);
+  });
+
+  sendSuccess(res, validSizes, 'Product sizes retrieved successfully');
 });
