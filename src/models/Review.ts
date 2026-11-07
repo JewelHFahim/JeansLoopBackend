@@ -1,7 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
 export interface IReview extends Document {
   productId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
   name: string;
   email?: string;
   rating: number;
@@ -10,6 +13,7 @@ export interface IReview extends Document {
   fit?: 'true_to_size' | 'runs_small' | 'runs_large';
   verifiedPurchase: boolean;
   helpfulCount: number;
+  status: ReviewStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +23,12 @@ const ReviewSchema = new Schema<IReview>(
     productId: {
       type: Schema.Types.ObjectId,
       ref: 'Product',
+      required: true,
+      index: true,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
       required: true,
       index: true,
     },
@@ -66,13 +76,21 @@ const ReviewSchema = new Schema<IReview>(
       default: 0,
       min: 0,
     },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+      index: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-ReviewSchema.index({ productId: 1, createdAt: -1 });
+ReviewSchema.index({ productId: 1, status: 1, createdAt: -1 });
 ReviewSchema.index({ productId: 1, rating: -1 });
+ReviewSchema.index({ status: 1, createdAt: -1 });
+ReviewSchema.index({ userId: 1, createdAt: -1 });
 
 export const Review = mongoose.model<IReview>('Review', ReviewSchema);

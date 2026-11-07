@@ -17,5 +17,22 @@ export const reviewQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
+export const adminReviewQuerySchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected', 'all']).optional().default('all'),
+  productId: z.string().trim().optional(),
+  rating: z.coerce.number().int().min(1).max(5).optional(),
+  keyword: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
+export const updateReviewStatusSchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected'], {
+    errorMap: () => ({ message: 'Status must be pending, approved, or rejected' }),
+  }),
+});
+
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 export type ReviewQueryInput = z.infer<typeof reviewQuerySchema>;
+export type AdminReviewQueryInput = z.infer<typeof adminReviewQuerySchema>;
+export type UpdateReviewStatusInput = z.infer<typeof updateReviewStatusSchema>;
