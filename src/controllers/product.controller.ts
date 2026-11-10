@@ -26,17 +26,41 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     conditions.push({ isDraft: false });
   }
 
-  // 1. High-performance keyword search utilizing compound text index
-  if (queryInput.keyword) {
-    const rawKeyword = queryInput.keyword.trim();
+  // 1. Keyword search (searches product name, SKU, category, color, description)
+  const rawKeyword = (
+    queryInput.keyword ||
+    (queryInput as any).search ||
+    (queryInput as any).q ||
+    (queryInput as any).name
+  )?.trim();
+
+  if (rawKeyword) {
     const escaped = escapeRegex(rawKeyword);
-    conditions.push({
-      $or: [
-        { $text: { $search: rawKeyword } },
-        { name: { $regex: escaped, $options: 'i' } },
-        { 'variants.sku': { $regex: `^${escaped}`, $options: 'i' } },
-      ],
-    });
+    const tokens = rawKeyword.split(/\s+/).filter(Boolean).map(escapeRegex);
+
+    const keywordClauses: any[] = [
+      { name: { $regex: escaped, $options: 'i' } },
+      { 'variants.sku': { $regex: escaped, $options: 'i' } },
+      { category: { $regex: escaped, $options: 'i' } },
+      { color: { $regex: escaped, $options: 'i' } },
+      { description: { $regex: escaped, $options: 'i' } },
+    ];
+
+    // If multi-word search (e.g. "Sea Black"), also match if all words match across key fields
+    if (tokens.length > 1) {
+      keywordClauses.push({
+        $and: tokens.map((token: string) => ({
+          $or: [
+            { name: { $regex: token, $options: 'i' } },
+            { 'variants.sku': { $regex: token, $options: 'i' } },
+            { category: { $regex: token, $options: 'i' } },
+            { color: { $regex: token, $options: 'i' } },
+          ],
+        })),
+      });
+    }
+
+    conditions.push({ $or: keywordClauses });
   }
 
   // 2. Category filter
@@ -101,10 +125,19 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   let sortOption: Record<string, 1 | -1> = { createdAt: -1 };
   if (queryInput.sort === 'price-low') sortOption = { price: 1 };
   if (queryInput.sort === 'price-high') sortOption = { price: -1 };
-  if (queryInput.sort === 'name') sortOption = { name: 1 };
+  if (queryInput.sort === 'name' || queryInput.sort === 'name-asc') sortOption = { name: 1 };
+  if (queryInput.sort === 'name-desc') sortOption = { name: -1 };
+  if (queryInput.sort === 'oldest') sortOption = { createdAt: 1 };
+
+  const isNameSort = queryInput.sort === 'name' || queryInput.sort === 'name-asc' || queryInput.sort === 'name-desc';
+
+  const findQuery = Product.find(mongoQuery).sort(sortOption);
+  if (isNameSort) {
+    findQuery.collation({ locale: 'en', strength: 2 });
+  }
 
   const [products, total] = await Promise.all([
-    Product.find(mongoQuery).sort(sortOption).skip(skip).limit(limit),
+    findQuery.skip(skip).limit(limit),
     Product.countDocuments(mongoQuery),
   ]);
 
