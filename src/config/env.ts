@@ -15,6 +15,9 @@ const envSchema = z.object({
   // Database
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
 
+  // Redis (optional: if omitted, automatic high-speed in-memory cache is used)
+  REDIS_URL: z.string().optional(),
+
   // JWT — no fallbacks; missing = immediate crash
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
@@ -50,6 +53,17 @@ if (!parsed.success) {
   });
   console.error('\nUpdate your .env file and restart.\n');
   process.exit(1);
+}
+
+// Production safety guard against default insecure secrets
+if (parsed.data.NODE_ENV === 'production') {
+  if (parsed.data.JWT_SECRET.includes('development') || parsed.data.JWT_SECRET.includes('change_me')) {
+    console.error('\n🚨 FATAL SECURITY RISK: Default JWT_SECRET detected in PRODUCTION mode. Change it immediately!\n');
+    process.exit(1);
+  }
+  if (parsed.data.SEED_ADMIN_PASSWORD && (parsed.data.SEED_ADMIN_PASSWORD.includes('123456') || parsed.data.SEED_ADMIN_PASSWORD.includes('ChangeMe'))) {
+    console.warn('\n⚠️  SECURITY WARNING: Weak SEED_ADMIN_PASSWORD detected in production.\n');
+  }
 }
 
 export const env = parsed.data;

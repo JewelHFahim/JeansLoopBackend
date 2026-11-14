@@ -13,6 +13,9 @@ export async function connectDB(retries = 100, delayMs = 3000): Promise<void> {
       await mongoose.connect(env.MONGODB_URI, {
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
+        maxPoolSize: 50, // Maintain up to 50 socket connections
+        minPoolSize: 10, // Maintain at least 10 socket connections
+        maxIdleTimeMS: 30000, // Close sockets after 30 seconds of inactivity
       });
 
       isConnected = true;

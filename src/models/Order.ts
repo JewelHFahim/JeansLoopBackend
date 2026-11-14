@@ -128,6 +128,8 @@ const OrderSchema = new Schema<IOrder>(
 OrderSchema.index({ userId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ isPaid: 1, createdAt: -1 });
+OrderSchema.index({ paymentMethod: 1, isPaid: 1, createdAt: -1 });
+OrderSchema.index({ 'shippingAddress.city': 1, status: 1 });
 OrderSchema.index({ 'items.productId': 1, status: 1 });
 OrderSchema.index({ 'shippingAddress.city': 1 });
 OrderSchema.index({ createdAt: -1 });

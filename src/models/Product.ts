@@ -100,6 +100,10 @@ const ProductSchema = new Schema<IProduct>(
 );
 
 // Indexes
+ProductSchema.index({ isDraft: 1, category: 1, createdAt: -1 });
+ProductSchema.index({ isDraft: 1, price: 1 });
+ProductSchema.index({ isDraft: 1, discountedPrice: 1 });
+ProductSchema.index({ isDraft: 1, discountPercentage: -1 });
 ProductSchema.index({ category: 1, isDraft: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ discountedPrice: 1 });

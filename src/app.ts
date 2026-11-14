@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import path from 'path';
 
 import { corsMiddleware } from './config/cors';
@@ -30,6 +31,20 @@ export function createApp(): Express {
 
   // 1. Core security headers
   app.use(helmet());
+
+  // 1.1 HTTP Response Compression (Gzip / Deflate)
+  app.use(
+    compression({
+      level: 6,
+      threshold: 1024, // only compress responses > 1KB
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    })
+  );
 
   // 2. CORS
   app.use(corsMiddleware);

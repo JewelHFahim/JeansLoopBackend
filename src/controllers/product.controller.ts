@@ -7,6 +7,7 @@ import { recordActivity } from '../services/activity.service';
 import { escapeRegex } from '../utils/escapeRegex';
 import { ProductQueryInput } from '../schemas/product.schema';
 import { deleteLocalImage } from '../services/image.service';
+import { cache } from '../services/cache.service';
 
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const queryInput = req.query as unknown as ProductQueryInput;
@@ -26,7 +27,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     conditions.push({ isDraft: false });
   }
 
-  // 1. Keyword search (searches product name, SKU, category, color, description)
+  // 1. Keyword search (utilizes MongoDB Text index when viable, with regex token matching fallback)
   const rawKeyword = (
     queryInput.keyword ||
     (queryInput as any).search ||
@@ -34,33 +35,41 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     (queryInput as any).name
   )?.trim();
 
+  let useTextScoreSort = false;
+
   if (rawKeyword) {
     const escaped = escapeRegex(rawKeyword);
     const tokens = rawKeyword.split(/\s+/).filter(Boolean).map(escapeRegex);
 
-    const keywordClauses: any[] = [
-      { name: { $regex: escaped, $options: 'i' } },
-      { 'variants.sku': { $regex: escaped, $options: 'i' } },
-      { category: { $regex: escaped, $options: 'i' } },
-      { color: { $regex: escaped, $options: 'i' } },
-      { description: { $regex: escaped, $options: 'i' } },
-    ];
+    // If query has alphanumeric tokens without regex operators, prefer MongoDB full-text index
+    if (/^[a-zA-Z0-9\s_-]+$/.test(rawKeyword) && !queryInput.sort) {
+      conditions.push({ $text: { $search: rawKeyword } });
+      useTextScoreSort = true;
+    } else {
+      const keywordClauses: any[] = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { 'variants.sku': { $regex: escaped, $options: 'i' } },
+        { category: { $regex: escaped, $options: 'i' } },
+        { color: { $regex: escaped, $options: 'i' } },
+        { description: { $regex: escaped, $options: 'i' } },
+      ];
 
-    // If multi-word search (e.g. "Sea Black"), also match if all words match across key fields
-    if (tokens.length > 1) {
-      keywordClauses.push({
-        $and: tokens.map((token: string) => ({
-          $or: [
-            { name: { $regex: token, $options: 'i' } },
-            { 'variants.sku': { $regex: token, $options: 'i' } },
-            { category: { $regex: token, $options: 'i' } },
-            { color: { $regex: token, $options: 'i' } },
-          ],
-        })),
-      });
+      // If multi-word search (e.g. "Sea Black"), match if all words match across key fields
+      if (tokens.length > 1) {
+        keywordClauses.push({
+          $and: tokens.map((token: string) => ({
+            $or: [
+              { name: { $regex: token, $options: 'i' } },
+              { 'variants.sku': { $regex: token, $options: 'i' } },
+              { category: { $regex: token, $options: 'i' } },
+              { color: { $regex: token, $options: 'i' } },
+            ],
+          })),
+        });
+      }
+
+      conditions.push({ $or: keywordClauses });
     }
-
-    conditions.push({ $or: keywordClauses });
   }
 
   // 2. Category filter
@@ -122,16 +131,27 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const mongoQuery = conditions.length > 1 ? { $and: conditions } : conditions.length === 1 ? conditions[0] : {};
 
   // Sorting
-  let sortOption: Record<string, 1 | -1> = { createdAt: -1 };
-  if (queryInput.sort === 'price-low') sortOption = { price: 1 };
-  if (queryInput.sort === 'price-high') sortOption = { price: -1 };
-  if (queryInput.sort === 'name' || queryInput.sort === 'name-asc') sortOption = { name: 1 };
-  if (queryInput.sort === 'name-desc') sortOption = { name: -1 };
-  if (queryInput.sort === 'oldest') sortOption = { createdAt: 1 };
+  let sortOption: Record<string, 1 | -1 | { $meta: 'textScore' }> = { createdAt: -1 };
+  if (useTextScoreSort) {
+    sortOption = { score: { $meta: 'textScore' } as any };
+  } else if (queryInput.sort === 'price-low') {
+    sortOption = { price: 1 };
+  } else if (queryInput.sort === 'price-high') {
+    sortOption = { price: -1 };
+  } else if (queryInput.sort === 'name' || queryInput.sort === 'name-asc') {
+    sortOption = { name: 1 };
+  } else if (queryInput.sort === 'name-desc') {
+    sortOption = { name: -1 };
+  } else if (queryInput.sort === 'oldest') {
+    sortOption = { createdAt: 1 };
+  }
 
   const isNameSort = queryInput.sort === 'name' || queryInput.sort === 'name-asc' || queryInput.sort === 'name-desc';
 
-  const findQuery = Product.find(mongoQuery).sort(sortOption);
+  const findQuery = Product.find(mongoQuery).sort(sortOption as any);
+  if (useTextScoreSort) {
+    findQuery.select({ score: { $meta: 'textScore' } });
+  }
   if (isNameSort) {
     findQuery.collation({ locale: 'en', strength: 2 });
   }
@@ -150,11 +170,18 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getProductBySlug = asyncHandler(async (req: Request, res: Response) => {
-  const slug = String(req.params.slug);
-  const product = await Product.findOne({ slug: slug.toLowerCase() });
+  const slug = String(req.params.slug).toLowerCase();
+  const cacheKey = `product:slug:${slug}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return sendSuccess(res, cached);
+  }
+
+  const product = await Product.findOne({ slug });
   if (!product) {
     throw AppError.notFound(`Product with slug "${slug}" not found`);
   }
+  await cache.set(cacheKey, product, 300); // 5 min TTL
   sendSuccess(res, product);
 });
 
@@ -196,6 +223,7 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
   });
 
   sendSuccess(res, product, 'Product created successfully', 201);
+  await cache.invalidatePrefix('product:');
 });
 
 export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
@@ -230,6 +258,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
     description: `Updated product details/pricing for "${updated.name}"`,
   });
 
+  await cache.invalidatePrefix('product:');
   sendSuccess(res, updated, 'Product updated successfully');
 });
 
@@ -265,11 +294,18 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
     description: `Deleted product "${product.name}" permanently`,
   });
 
+  await cache.invalidatePrefix('product:');
   sendSuccess(res, null, 'Product deleted successfully');
 });
 
 export const getProductSizes = asyncHandler(async (req: Request, res: Response) => {
   const category = req.query.category as string | undefined;
+  const cacheKey = `product:sizes:${category || 'all'}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return sendSuccess(res, cached, 'Product sizes retrieved successfully (cached)');
+  }
+
   const filter: any = { isDraft: false };
 
   if (category && category !== 'all') {
@@ -311,5 +347,6 @@ export const getProductSizes = asyncHandler(async (req: Request, res: Response) 
     return a.localeCompare(b);
   });
 
+  await cache.set(cacheKey, validSizes, 300); // 5 min TTL
   sendSuccess(res, validSizes, 'Product sizes retrieved successfully');
 });
